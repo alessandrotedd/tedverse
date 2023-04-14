@@ -41,7 +41,7 @@ bin/
 ### Mac OS ###
 .DS_Store
 
+.idea
 users
 cert
 config.properties
-keystore.jks
