@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.webhook
+import com.google.gson.Gson
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -124,7 +125,7 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
         }
 
         else -> {
-            handleText(bot, userId, textMessage)
+            handleCommandArgument(bot, userId, textMessage)
         }
     }
 
@@ -134,7 +135,7 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
     logUserCommand(userId, textMessage)
 }
 
-fun handleText(bot: Bot, userId: Long, text: String) {
+fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
     when (Command.fromValue(getLastCommand(userId))) {
         Command.IMAGE -> {
             generateImage(userId = userId, prompt = text).let { success ->
@@ -152,10 +153,37 @@ fun handleText(bot: Bot, userId: Long, text: String) {
             }
         }
 
+        Command.RATIO -> {
+            if (!listOf("16:9", "9:16", "1:1").contains(text)) {
+                bot.sendMessage(
+                    ChatId.fromId(userId),
+                    "Invalid ratio. Choose between 16:9, 9:16 and 1:1"
+                )
+                return
+            }
+            val preferences = getPreferences(userId)
+            preferences.aspectRatio = text
+            setPreferences(userId, preferences)
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Your preferred image size ratio is now $text"
+            )
+        }
+
         else -> {
             handleMessage(bot, userId, Command.HELP.value)
         }
     }
+}
+
+fun setPreferences(userId: Long, preferences: Preferences) {
+    val file = File("users/$userId/preferences.json")
+    file.writeText(Gson().toJson(preferences))
+}
+
+fun getPreferences(userId: Long): Preferences {
+    val file = File("users/$userId/preferences.json")
+    return Gson().fromJson(BufferedReader(InputStreamReader(FileInputStream(file))), Preferences::class.java)
 }
 
 fun logUserCommand(userId: Long, text: String) {
@@ -182,6 +210,13 @@ fun onStart(user: Long) {
     File("users/$user/commands.txt").let {
         if (!it.exists()) {
             it.createNewFile()
+        }
+    }
+    // preferences
+    File("users/$user/preferences.json").let {
+        if (!it.exists()) {
+            it.createNewFile()
+            it.writeText(Gson().toJson(Preferences()))
         }
     }
 }
