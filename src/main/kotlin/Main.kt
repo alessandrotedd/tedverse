@@ -14,19 +14,25 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileInputStream
 import java.io.InputStreamReader
+import java.security.KeyStore
+import java.util.*
 
 fun main() {
-    val botToken = System.getProperty("botToken")
-    val hostname = System.getProperty("hostname")
-    val port = System.getProperty("port").toInt()
+    val props = Properties().apply { load(FileInputStream("config.properties")) }
+
+    val botToken = props.getProperty("botToken")
+    val hostname = props.getProperty("hostname")
+    val port = props.getProperty("port").toInt()
+    val keyStoreFile = File("cert/keystore.jks")
 
     val bot = bot {
         token = botToken
         webhook {
             url = "https://$hostname:$port/$botToken"
             println("Webhook url: $url")
-            certificate = TelegramFile.ByFile(File("keystore.jks"))
+            certificate = TelegramFile.ByFile(keyStoreFile)
             maxConnections = 50
             allowedUpdates = listOf("message")
         }
@@ -50,14 +56,20 @@ fun main() {
             }
         }
 
+        val keyStore: KeyStore by lazy {
+            val ks = KeyStore.getInstance(KeyStore.getDefaultType())
+            ks.load(keyStoreFile.inputStream(), props.getProperty("keyStorePassword").toCharArray())
+            ks
+        }
+
         sslConnector(
-            keyStore = CertificateUtils.keyStore,
-            keyAlias = CertificateUtils.keyAlias,
-            keyStorePassword = { CertificateUtils.keyStorePassword },
-            privateKeyPassword = { CertificateUtils.privateKeyPassword }
+            keyStore = keyStore,
+            keyAlias = props.getProperty("keyAlias"),
+            keyStorePassword = { props.getProperty("keyStorePassword").toCharArray() },
+            privateKeyPassword = { props.getProperty("privateKeyPassword").toCharArray() }
         ) {
             this.port = port
-            keyStorePath = CertificateUtils.keyStoreFile.absoluteFile
+            keyStorePath = keyStoreFile.absoluteFile
             host = "0.0.0.0"
         }
     }
@@ -78,9 +90,11 @@ enum class Command(val value: String) {
 }
 
 fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
+    if (!File("users/$userId").exists()) {
+        onStart(userId)
+    }
     when (Command.fromValue(textMessage)) {
         Command.START -> {
-            onStart(userId)
             bot.sendMessage(
                 ChatId.fromId(userId),
                 "Hello! Use the command /image to generate an image"
