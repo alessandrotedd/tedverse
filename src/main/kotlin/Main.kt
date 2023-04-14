@@ -20,15 +20,12 @@ import java.security.KeyStore
 import java.util.*
 
 fun main() {
-    val configFile = "config.properties"
-    val props = Properties()
-    val inputStream = FileInputStream(configFile)
-    props.load(inputStream)
+    val props = Properties().apply { load(FileInputStream("config.properties")) }
 
     val botToken = props.getProperty("botToken")
     val hostname = props.getProperty("hostname")
     val port = props.getProperty("port").toInt()
-    val keyStoreFile = File("keystore.jks")
+    val keyStoreFile = File("cert/keystore.jks")
 
     val bot = bot {
         token = botToken
