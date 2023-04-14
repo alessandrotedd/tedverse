@@ -1,0 +1,182 @@
+import com.github.kotlintelegrambot.bot
+import com.github.kotlintelegrambot.dispatch
+import com.github.kotlintelegrambot.dispatcher.text
+import com.github.kotlintelegrambot.entities.ChatId
+import com.github.kotlintelegrambot.entities.TelegramFile
+import com.github.kotlintelegrambot.Bot
+import com.github.kotlintelegrambot.webhook
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
+
+fun main() {
+    val botToken = System.getProperty("botToken")
+    val hostname = System.getProperty("hostname")
+    val port = System.getProperty("port").toInt()
+
+    val bot = bot {
+        token = botToken
+        webhook {
+            url = "https://$hostname:$port/$botToken"
+            println("Webhook url: $url")
+            certificate = TelegramFile.ByFile(File("keystore.jks"))
+            maxConnections = 50
+            allowedUpdates = listOf("message")
+        }
+        dispatch {
+            text {
+                handleMessage(bot, message.chat.id, message.text ?: "")
+            }
+        }
+    }
+    bot.startWebhook()
+    bot.startPolling()
+
+    val env = applicationEngineEnvironment {
+        module {
+            routing {
+                post("/$botToken") {
+                    val response = call.receiveText()
+                    bot.processUpdate(response)
+                    call.respond(HttpStatusCode.OK)
+                }
+            }
+        }
+
+        sslConnector(
+            keyStore = CertificateUtils.keyStore,
+            keyAlias = CertificateUtils.keyAlias,
+            keyStorePassword = { CertificateUtils.keyStorePassword },
+            privateKeyPassword = { CertificateUtils.privateKeyPassword }
+        ) {
+            this.port = port
+            keyStorePath = CertificateUtils.keyStoreFile.absoluteFile
+            host = "0.0.0.0"
+        }
+    }
+
+    embeddedServer(Netty, env).start(wait = true)
+}
+
+enum class Command(val value: String) {
+    START("/start"),
+    IMAGE("/image"),
+    HELP("/help");
+
+    companion object {
+        fun fromValue(text: String): Command? {
+            return values().find { it.value == text }
+        }
+    }
+}
+
+fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
+    when (Command.fromValue(textMessage)) {
+        Command.START -> {
+            onStart(userId)
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Hello! Use the command /image to generate an image"
+            )
+        }
+
+        Command.IMAGE -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Send me a text and I will generate an image"
+            )
+        }
+
+        Command.HELP -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Use the command /image to generate an image"
+            )
+        }
+
+        else -> {
+            handleText(bot, userId, textMessage)
+        }
+    }
+
+    Command.fromValue(textMessage)?.let { command ->
+        setLastCommand(userId, command.value)
+    }
+    logUserCommand(userId, textMessage)
+}
+
+fun handleText(bot: Bot, userId: Long, text: String) {
+    when (Command.fromValue(getLastCommand(userId))) {
+        Command.IMAGE -> {
+            generateImage(userId = userId, prompt = text).let { success ->
+                if (success) {
+                    bot.sendPhoto(
+                        ChatId.fromId(userId),
+                        TelegramFile.ByFile(File("users/$userId/image.png"))
+                    )
+                } else {
+                    bot.sendMessage(
+                        ChatId.fromId(userId),
+                        "Something went wrong"
+                    )
+                }
+            }
+        }
+
+        else -> {
+            handleMessage(bot, userId, Command.HELP.value)
+        }
+    }
+}
+
+fun logUserCommand(userId: Long, text: String) {
+    println("User $userId: $text")
+    File("users/$userId/commands.txt").appendText("$text\n")
+}
+
+fun setLastCommand(userId: Long, text: String) = File("users/$userId/last_command.txt").writeText(text)
+
+fun getLastCommand(user: Long): String = File("users/$user/last_command.txt").readText()
+
+fun onStart(user: Long) {
+    println("User $user started the bot")
+    File("users/$user").let {
+        if (!it.exists()) {
+            it.mkdirs()
+        }
+    }
+    File("users/$user/last_command.txt").let {
+        if (!it.exists()) {
+            it.createNewFile()
+        }
+    }
+    File("users/$user/commands.txt").let {
+        if (!it.exists()) {
+            it.createNewFile()
+        }
+    }
+}
+
+fun generateImage(userId: Long, prompt: String): Boolean {
+    val scriptLocation = "txt2img.py"
+    val args = "\"${prompt.replace("\"", "")}\" --filename \"users/$userId/image\""
+    val processBuilder = ProcessBuilder("python", scriptLocation, args)
+    processBuilder.redirectErrorStream(true)
+    val process = processBuilder.start()
+
+    val output = BufferedReader(InputStreamReader(process.inputStream))
+    var line: String?
+    while (output.readLine().also { line = it } != null) {
+        println(line)
+    }
+
+    val exitCode = process.waitFor()
+    return exitCode == 0
+}
