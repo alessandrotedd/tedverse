@@ -26,7 +26,7 @@ fun main() {
         webhook {
             url = "https://$hostname:$port/$botToken"
             println("Webhook url: $url")
-            certificate = TelegramFile.ByFile(File("cert/keystore.jks"))
+            certificate = TelegramFile.ByFile(File("keystore.jks"))
             maxConnections = 50
             allowedUpdates = listOf("message")
         }
