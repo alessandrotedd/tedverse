@@ -90,9 +90,11 @@ enum class Command(val value: String) {
 }
 
 fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
+    if (!File("users/$userId").exists()) {
+        onStart(userId)
+    }
     when (Command.fromValue(textMessage)) {
         Command.START -> {
-            onStart(userId)
             bot.sendMessage(
                 ChatId.fromId(userId),
                 "Hello! Use the command /image to generate an image"
