@@ -6,6 +6,8 @@ import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.webhook
 import com.google.gson.Gson
+import data.AspectRatio
+import data.Preferences
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -120,7 +122,7 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
         Command.RATIO -> {
             bot.sendMessage(
                 ChatId.fromId(userId),
-                "Choose your preferred image size ratio between 16:9, 9:16 and 1:1"
+                "Choose your preferred image size ratio between ${AspectRatio.values().joinToString(", ") { it.textValue }}"
             )
         }
 
@@ -154,10 +156,10 @@ fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
         }
 
         Command.RATIO -> {
-            if (!listOf("16:9", "9:16", "1:1").contains(text)) {
+            if (AspectRatio.fromValue(text) == null) {
                 bot.sendMessage(
                     ChatId.fromId(userId),
-                    "Invalid ratio. Choose between 16:9, 9:16 and 1:1"
+                    "Invalid ratio. Choose between ${AspectRatio.values().joinToString(", ") { it.textValue }}"
                 )
                 return
             }
@@ -179,6 +181,7 @@ fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
 fun setPreferences(userId: Long, preferences: Preferences) {
     val file = File("users/$userId/preferences.json")
     file.writeText(Gson().toJson(preferences))
+    setLastCommand(userId, Command.IMAGE.value)
 }
 
 fun getPreferences(userId: Long): Preferences {
