@@ -43,5 +43,5 @@ bin/
 
 users
 cert
-gradle.properties
+config.properties
 keystore.jks
