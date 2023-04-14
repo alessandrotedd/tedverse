@@ -80,7 +80,8 @@ fun main() {
 enum class Command(val value: String) {
     START("/start"),
     IMAGE("/image"),
-    HELP("/help");
+    HELP("/help"),
+    RATIO("/ratio");
 
     companion object {
         fun fromValue(text: String): Command? {
@@ -112,6 +113,13 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
             bot.sendMessage(
                 ChatId.fromId(userId),
                 "Use the command /image to generate an image"
+            )
+        }
+
+        Command.RATIO -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Choose your preferred image size ratio between 16:9, 9:16 and 1:1"
             )
         }
 
