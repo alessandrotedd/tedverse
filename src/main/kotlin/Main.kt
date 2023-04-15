@@ -225,9 +225,16 @@ fun onStart(user: Long) {
 }
 
 fun generateImage(userId: Long, prompt: String): Boolean {
-    val scriptLocation = "txt2img.py"
-    val args = "\"${prompt.replace("\"", "")}\" --filename \"users/$userId/image\""
-    val processBuilder = ProcessBuilder("python", scriptLocation, args)
+    val preferences = getPreferences(userId)
+    val ratio = AspectRatio.fromValue(preferences.aspectRatio) ?: AspectRatio.RATIO_1_1
+    val processBuilder = ProcessBuilder(
+        "python",
+        "txt2img.py",
+        "\"${prompt.replace("\"", "")}\"",
+        "--filename","\"users/$userId/image\"",
+        "--width","${ratio.width}",
+        "--height","${ratio.height}"
+    )
     processBuilder.redirectErrorStream(true)
     val process = processBuilder.start()
 

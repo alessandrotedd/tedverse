@@ -1,6 +1,5 @@
 import webuiapi
 import argparse
-import datetime
 
 parser = argparse.ArgumentParser(description='Convert image to text')
 parser.add_argument('prompt', help='Prompt for the model')
