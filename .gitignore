@@ -41,7 +41,7 @@ bin/
 ### Mac OS ###
 .DS_Store
 
+.idea
 users
 cert
-gradle.properties
-keystore.jks
+config.properties
