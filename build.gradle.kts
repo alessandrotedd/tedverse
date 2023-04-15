@@ -18,6 +18,7 @@ dependencies {
 
     implementation("ch.qos.logback:logback-classic:1.2.9")
     implementation("org.slf4j:slf4j-api:1.7.30")
+    implementation("com.google.code.gson:gson:2.8.9")
 }
 
 tasks.test {

@@ -5,6 +5,9 @@ import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.webhook
+import com.google.gson.Gson
+import data.AspectRatio
+import data.Preferences
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -80,7 +83,8 @@ fun main() {
 enum class Command(val value: String) {
     START("/start"),
     IMAGE("/image"),
-    HELP("/help");
+    HELP("/help"),
+    RATIO("/ratio");
 
     companion object {
         fun fromValue(text: String): Command? {
@@ -115,8 +119,15 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
             )
         }
 
+        Command.RATIO -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Choose your preferred image size ratio between ${AspectRatio.values().joinToString(", ") { it.textValue }}"
+            )
+        }
+
         else -> {
-            handleText(bot, userId, textMessage)
+            handleCommandArgument(bot, userId, textMessage)
         }
     }
 
@@ -126,7 +137,7 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
     logUserCommand(userId, textMessage)
 }
 
-fun handleText(bot: Bot, userId: Long, text: String) {
+fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
     when (Command.fromValue(getLastCommand(userId))) {
         Command.IMAGE -> {
             generateImage(userId = userId, prompt = text).let { success ->
@@ -144,10 +155,38 @@ fun handleText(bot: Bot, userId: Long, text: String) {
             }
         }
 
+        Command.RATIO -> {
+            if (AspectRatio.fromValue(text) == null) {
+                bot.sendMessage(
+                    ChatId.fromId(userId),
+                    "Invalid ratio. Choose between ${AspectRatio.values().joinToString(", ") { it.textValue }}"
+                )
+                return
+            }
+            val preferences = getPreferences(userId)
+            preferences.aspectRatio = text
+            setPreferences(userId, preferences)
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Your preferred image size ratio is now $text"
+            )
+        }
+
         else -> {
             handleMessage(bot, userId, Command.HELP.value)
         }
     }
+}
+
+fun setPreferences(userId: Long, preferences: Preferences) {
+    val file = File("users/$userId/preferences.json")
+    file.writeText(Gson().toJson(preferences))
+    setLastCommand(userId, Command.IMAGE.value)
+}
+
+fun getPreferences(userId: Long): Preferences {
+    val file = File("users/$userId/preferences.json")
+    return Gson().fromJson(BufferedReader(InputStreamReader(FileInputStream(file))), Preferences::class.java)
 }
 
 fun logUserCommand(userId: Long, text: String) {
@@ -176,12 +215,26 @@ fun onStart(user: Long) {
             it.createNewFile()
         }
     }
+    // preferences
+    File("users/$user/preferences.json").let {
+        if (!it.exists()) {
+            it.createNewFile()
+            it.writeText(Gson().toJson(Preferences()))
+        }
+    }
 }
 
 fun generateImage(userId: Long, prompt: String): Boolean {
-    val scriptLocation = "txt2img.py"
-    val args = "\"${prompt.replace("\"", "")}\" --filename \"users/$userId/image\""
-    val processBuilder = ProcessBuilder("python", scriptLocation, args)
+    val preferences = getPreferences(userId)
+    val ratio = AspectRatio.fromValue(preferences.aspectRatio) ?: AspectRatio.RATIO_1_1
+    val processBuilder = ProcessBuilder(
+        "python",
+        "txt2img.py",
+        "\"${prompt.replace("\"", "")}\"",
+        "--filename","\"users/$userId/image\"",
+        "--width","${ratio.width}",
+        "--height","${ratio.height}"
+    )
     processBuilder.redirectErrorStream(true)
     val process = processBuilder.start()
 
