@@ -148,7 +148,12 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
 fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
     when (Command.fromValue(getLastCommand(userId))) {
         Command.IMAGE -> {
-            generateImage(userId = userId, prompt = text).let { success ->
+            val preferences = getPreferences(userId)
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Generating image: $text\nExcluding: ${preferences.without}"
+            )
+            generateImage(userId = userId, prompt = text, preferences).let { success ->
                 if (success) {
                     bot.sendPhoto(
                         ChatId.fromId(userId),
@@ -242,8 +247,7 @@ fun onStart(user: Long) {
     }
 }
 
-fun generateImage(userId: Long, prompt: String): Boolean {
-    val preferences = getPreferences(userId)
+fun generateImage(userId: Long, prompt: String, preferences: Preferences): Boolean {
     val ratio = AspectRatio.fromValue(preferences.aspectRatio) ?: AspectRatio.RATIO_1_1
     val processBuilder = ProcessBuilder(
         "python",
