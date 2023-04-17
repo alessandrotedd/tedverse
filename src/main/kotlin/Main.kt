@@ -41,7 +41,7 @@ fun main() {
         }
         dispatch {
             text {
-                handleMessage(bot, message.chat.id, message.text ?: "")
+                handleMessage(bot, message.chat.id, message.text?.trim() ?: "")
             }
         }
     }
@@ -84,6 +84,8 @@ enum class Command(val value: String) {
     START("/start"),
     IMAGE("/image"),
     HELP("/help"),
+    WITHOUT("/without"),
+    RESET_WITHOUT("/resetwithout"),
     RATIO("/ratio");
 
     companion object {
@@ -119,6 +121,23 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
             )
         }
 
+        Command.WITHOUT -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "What would you like not to be included in the generated image?"
+            )
+        }
+
+        Command.RESET_WITHOUT -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "The bot won't exclude anything from the next generated images"
+            )
+            val preferences = getPreferences(userId)
+            preferences.without = ""
+            setPreferences(userId, preferences)
+        }
+
         Command.RATIO -> {
             bot.sendMessage(
                 ChatId.fromId(userId),
@@ -140,7 +159,12 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
 fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
     when (Command.fromValue(getLastCommand(userId))) {
         Command.IMAGE -> {
-            generateImage(userId = userId, prompt = text).let { success ->
+            val preferences = getPreferences(userId)
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "Generating image: $text\nExcluding: ${preferences.without}"
+            )
+            generateImage(userId = userId, prompt = text, preferences).let { success ->
                 if (success) {
                     bot.sendPhoto(
                         ChatId.fromId(userId),
@@ -153,6 +177,16 @@ fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
                     )
                 }
             }
+        }
+
+        Command.WITHOUT -> {
+            val preferences = getPreferences(userId)
+            preferences.without = text
+            setPreferences(userId, preferences)
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "I'll exclude that from the next images"
+            )
         }
 
         Command.RATIO -> {
@@ -224,8 +258,7 @@ fun onStart(user: Long) {
     }
 }
 
-fun generateImage(userId: Long, prompt: String): Boolean {
-    val preferences = getPreferences(userId)
+fun generateImage(userId: Long, prompt: String, preferences: Preferences): Boolean {
     val ratio = AspectRatio.fromValue(preferences.aspectRatio) ?: AspectRatio.RATIO_1_1
     val processBuilder = ProcessBuilder(
         "python",
@@ -233,7 +266,8 @@ fun generateImage(userId: Long, prompt: String): Boolean {
         "\"${prompt.replace("\"", "")}\"",
         "--filename","\"users/$userId/image\"",
         "--width","${ratio.width}",
-        "--height","${ratio.height}"
+        "--height","${ratio.height}",
+        "--negative",preferences.without
     )
     processBuilder.redirectErrorStream(true)
     val process = processBuilder.start()
