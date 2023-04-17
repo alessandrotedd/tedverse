@@ -41,7 +41,7 @@ fun main() {
         }
         dispatch {
             text {
-                handleMessage(bot, message.chat.id, message.text ?: "")
+                handleMessage(bot, message.chat.id, message.text?.trim() ?: "")
             }
         }
     }
@@ -85,6 +85,7 @@ enum class Command(val value: String) {
     IMAGE("/image"),
     HELP("/help"),
     WITHOUT("/without"),
+    RESET_WITHOUT("/resetwithout"),
     RATIO("/ratio");
 
     companion object {
@@ -125,6 +126,16 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
                 ChatId.fromId(userId),
                 "What would you like not to be included in the generated image?"
             )
+        }
+
+        Command.RESET_WITHOUT -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "The bot won't exclude anything from the next generated images"
+            )
+            val preferences = getPreferences(userId)
+            preferences.without = ""
+            setPreferences(userId, preferences)
         }
 
         Command.RATIO -> {
@@ -170,7 +181,7 @@ fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
 
         Command.WITHOUT -> {
             val preferences = getPreferences(userId)
-            preferences.without = text.trim()
+            preferences.without = text
             setPreferences(userId, preferences)
             bot.sendMessage(
                 ChatId.fromId(userId),
