@@ -84,6 +84,7 @@ enum class Command(val value: String) {
     START("/start"),
     IMAGE("/image"),
     HELP("/help"),
+    WITHOUT("/without"),
     RATIO("/ratio");
 
     companion object {
@@ -116,6 +117,13 @@ fun handleMessage(bot: Bot, userId: Long, textMessage: String) {
             bot.sendMessage(
                 ChatId.fromId(userId),
                 "Use the command /image to generate an image"
+            )
+        }
+
+        Command.WITHOUT -> {
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "What would you like not to be included in the generated image?"
             )
         }
 
@@ -153,6 +161,16 @@ fun handleCommandArgument(bot: Bot, userId: Long, text: String) {
                     )
                 }
             }
+        }
+
+        Command.WITHOUT -> {
+            val preferences = getPreferences(userId)
+            preferences.without = text.trim()
+            setPreferences(userId, preferences)
+            bot.sendMessage(
+                ChatId.fromId(userId),
+                "I'll exclude that from the next images"
+            )
         }
 
         Command.RATIO -> {
@@ -233,7 +251,8 @@ fun generateImage(userId: Long, prompt: String): Boolean {
         "\"${prompt.replace("\"", "")}\"",
         "--filename","\"users/$userId/image\"",
         "--width","${ratio.width}",
-        "--height","${ratio.height}"
+        "--height","${ratio.height}",
+        "--negative",preferences.without
     )
     processBuilder.redirectErrorStream(true)
     val process = processBuilder.start()
